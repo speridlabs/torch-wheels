@@ -1,6 +1,12 @@
 name: build-wheels
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/build-wheels.yml
+      - scripts/ci_build.sh
+      - scripts/patch_triton_wheel.sh
   workflow_dispatch:
     inputs:
       torch:
@@ -26,8 +32,8 @@ jobs:
     steps:
       - id: m
         env:
-          T: ${{ inputs.torch }}
-          P: ${{ inputs.python }}
+          T: ${{ inputs.torch || 'all' }}
+          P: ${{ inputs.python || 'all' }}
         run: |
           [ "$T" = all ] && T='"2.9.1","2.11.0"' || T="\"$T\""
           [ "$P" = all ] && P='"3.10","3.11","3.12"' || P="\"$P\""
@@ -121,7 +127,7 @@ jobs:
 
   publish:
     needs: [plan, build, triton]
-    if: inputs.publish
+    if: github.event_name == 'push' || inputs.publish
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
