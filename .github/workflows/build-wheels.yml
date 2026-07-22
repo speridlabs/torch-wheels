@@ -1,0 +1,155 @@
+name: build-wheels
+
+on:
+  workflow_dispatch:
+    inputs:
+      torch:
+        description: "torch version (2.9.1 | 2.11.0 | all)"
+        default: all
+      python:
+        description: "python (3.10 | 3.11 | 3.12 | all)"
+        default: all
+      publish:
+        description: "upload wheels to the matching release"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      torch: ${{ steps.m.outputs.torch }}
+      python: ${{ steps.m.outputs.python }}
+    steps:
+      - id: m
+        env:
+          T: ${{ inputs.torch }}
+          P: ${{ inputs.python }}
+        run: |
+          [ "$T" = all ] && T='"2.9.1","2.11.0"' || T="\"$T\""
+          [ "$P" = all ] && P='"3.10","3.11","3.12"' || P="\"$P\""
+          echo "torch=[$T]" >> "$GITHUB_OUTPUT"
+          echo "python=[$P]" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    runs-on: ubuntu-latest-m
+    timeout-minutes: 355
+    strategy:
+      fail-fast: false
+      matrix:
+        torch: ${{ fromJSON(needs.plan.outputs.torch) }}
+        python: ${{ fromJSON(needs.plan.outputs.python) }}
+    name: torch ${{ matrix.torch }} py${{ matrix.python }}
+    steps:
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+
+      - name: Checkout build scripts
+        uses: actions/checkout@v4
+        with:
+          path: repo
+
+      - name: Checkout pytorch v${{ matrix.torch }} (with submodules)
+        uses: actions/checkout@v4
+        with:
+          repository: pytorch/pytorch
+          ref: v${{ matrix.torch }}
+          submodules: recursive
+          path: pytorch
+
+      - name: Build wheel in official builder image
+        env:
+          TORCH_VERSION: ${{ matrix.torch }}
+          PY: ${{ matrix.python }}
+        run: bash repo/scripts/ci_build.sh
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.torch }}-py${{ matrix.python }}
+          path: artifacts/torch-*.whl
+          retention-days: 14
+
+      - name: Upload ptxas (for the triton companion job)
+        if: matrix.python == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ptxas-${{ matrix.torch }}
+          path: artifacts/ptxas
+          retention-days: 7
+
+  triton:
+    needs: [plan, build]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        torch: ${{ fromJSON(needs.plan.outputs.torch) }}
+    name: triton companion for ${{ matrix.torch }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: repo
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheel-${{ matrix.torch }}-*
+          path: wheels
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ptxas-${{ matrix.torch }}
+          path: tools
+
+      - name: Patch triton wheels
+        run: |
+          W=$(ls wheels/torch-*.whl | head -1)
+          bash repo/scripts/patch_triton_wheel.sh "$W" tools/ptxas triton-out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: triton-${{ matrix.torch }}
+          path: triton-out/*.whl
+          retention-days: 14
+
+  publish:
+    needs: [plan, build, triton]
+    if: inputs.publish
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        torch: ${{ fromJSON(needs.plan.outputs.torch) }}
+    name: publish ${{ matrix.torch }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheel-${{ matrix.torch }}-*
+          path: dist
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: triton-${{ matrix.torch }}
+          path: dist
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v${{ matrix.torch }}-cu130-multiarch"
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" \
+              --notes "torch ${{ matrix.torch }} + CUDA 13.0, official build + native sm_103 (B300), cp310/cp311/cp312, plus patched-ptxas triton companion. See README."
+          fi
+          ls -lah dist/
+          gh release upload "$TAG" dist/*.whl --repo "$GITHUB_REPOSITORY" --clobber
