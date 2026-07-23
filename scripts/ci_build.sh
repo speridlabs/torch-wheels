@@ -39,6 +39,7 @@ cid=$(docker run --detach --tty \
   -e PYTORCH_ROOT=/pytorch \
   -e "PYTORCH_EXTRA_INSTALL_REQUIREMENTS=$EXTRA_REQS" \
   -e SKIP_ALL_TESTS=1 \
+  -e "MAX_JOBS=${BUILD_MAX_JOBS:-8}" \
   "$IMAGE")
 trap 'docker stop "$cid" >/dev/null 2>&1 || true' EXIT
 

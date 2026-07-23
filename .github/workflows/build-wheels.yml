@@ -50,7 +50,6 @@ jobs:
     timeout-minutes: 355
     strategy:
       fail-fast: false
-      max-parallel: 2
       matrix:
         torch: ${{ fromJSON(needs.plan.outputs.torch) }}
         python: ${{ fromJSON(needs.plan.outputs.python) }}
