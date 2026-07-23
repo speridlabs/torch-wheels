@@ -86,6 +86,9 @@ jobs:
           path: artifacts/torch-*.whl
           retention-days: 14
 
+      - name: Verify wheel (arch coverage + MPI leak)
+        run: bash repo/scripts/verify_wheel.sh
+
       - name: Upload ptxas (for the triton companion job)
         if: matrix.python == '3.12'
         uses: actions/upload-artifact@v4
