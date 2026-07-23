@@ -50,11 +50,13 @@ docker exec -t "$cid" bash -c "grep -q '10.3' /pytorch/.ci/manywheel/build_cuda.
 
 docker exec -t "$cid" bash -c "printf '%s\n' 'export OVERRIDE_PACKAGE_VERSION=$VERSION' >> /tmp/env && source /tmp/env && bash /pytorch/.ci/manywheel/build.sh"
 
-PTXAS_PATH=$(docker exec "$cid" bash -c 'readlink -f "$(command -v ptxas 2>/dev/null || ls /usr/local/cuda*/bin/ptxas 2>/dev/null | head -1)"' | tr -d '\r')
-[ -n "$PTXAS_PATH" ] || { echo "ptxas not found in builder image"; exit 1; }
-docker cp "$cid:$PTXAS_PATH" "$OUT/ptxas"
-CUOBJ_PATH=$(docker exec "$cid" bash -c 'readlink -f "$(command -v cuobjdump 2>/dev/null || ls /usr/local/cuda*/bin/cuobjdump 2>/dev/null | head -1)"' | tr -d '\r') || true
-[ -n "$CUOBJ_PATH" ] && docker cp "$cid:$CUOBJ_PATH" "$OUT/cuobjdump" || echo "note: cuobjdump not in image (verify step will use strings fallback)"
+find_in_container() { docker exec "$cid" find /usr/local /opt -maxdepth 5 -name "$1" -type f 2>/dev/null | head -1 | tr -d '\r' || true; }
+PTXAS_PATH=$(find_in_container ptxas)
+echo "--- ptxas in image: ${PTXAS_PATH:-NOT FOUND}"
+if [ -n "$PTXAS_PATH" ]; then docker cp "$cid:$PTXAS_PATH" "$OUT/ptxas"; else echo "ptxas not found in builder image"; exit 1; fi
+CUOBJ_PATH=$(find_in_container cuobjdump)
+echo "--- cuobjdump in image: ${CUOBJ_PATH:-NOT FOUND (verify step will use strings fallback)}"
+if [ -n "$CUOBJ_PATH" ]; then docker cp "$cid:$CUOBJ_PATH" "$OUT/cuobjdump"; fi
 
 WHL=$(ls "$OUT"/torch-*.whl)
 echo "--- built: $(basename "$WHL") ($(du -h "$WHL" | cut -f1))"
