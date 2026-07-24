@@ -46,7 +46,7 @@ jobs:
 
   build:
     needs: plan
-    runs-on: ubuntu-latest-m
+    runs-on: big-boy
     timeout-minutes: 355
     strategy:
       fail-fast: false
@@ -77,7 +77,7 @@ jobs:
         env:
           TORCH_VERSION: ${{ matrix.torch }}
           PY: ${{ matrix.python }}
-          BUILD_MAX_JOBS: ${{ matrix.torch == '2.11.0' && '6' || '8' }}
+          BUILD_MAX_JOBS: ${{ matrix.torch == '2.11.0' && '12' || '16' }}
         run: bash repo/scripts/ci_build.sh
 
       - name: Upload wheel
