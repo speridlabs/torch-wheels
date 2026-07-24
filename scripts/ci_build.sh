@@ -51,13 +51,10 @@ docker exec -t "$cid" bash -c "grep -q '10.3' /pytorch/.ci/manywheel/build_cuda.
 
 docker exec -t "$cid" bash -c "printf '%s\n' 'export OVERRIDE_PACKAGE_VERSION=$VERSION' >> /tmp/env && source /tmp/env && bash /pytorch/.ci/manywheel/build.sh"
 
-find_in_container() { docker exec "$cid" find /usr/local /opt -maxdepth 5 -name "$1" -type f 2>/dev/null | head -1 | tr -d '\r' || true; }
-PTXAS_PATH=$(find_in_container ptxas)
-echo "--- ptxas in image: ${PTXAS_PATH:-NOT FOUND}"
-if [ -n "$PTXAS_PATH" ]; then docker cp "$cid:$PTXAS_PATH" "$OUT/ptxas"; else echo "ptxas not found in builder image"; exit 1; fi
-CUOBJ_PATH=$(find_in_container cuobjdump)
-echo "--- cuobjdump in image: ${CUOBJ_PATH:-NOT FOUND (verify step will use strings fallback)}"
-if [ -n "$CUOBJ_PATH" ]; then docker cp "$cid:$CUOBJ_PATH" "$OUT/cuobjdump"; fi
+tmpc=$(docker create "$IMAGE")
+docker cp "$tmpc:/usr/local/cuda-13.0/bin/ptxas" "$OUT/ptxas" || echo "warn: ptxas extraction failed (triton companion will need a fallback)"
+docker cp "$tmpc:/usr/local/cuda-13.0/bin/cuobjdump" "$OUT/cuobjdump" || echo "warn: cuobjdump extraction failed (verify uses strings fallback)"
+docker rm -f "$tmpc" >/dev/null
 
 WHL=$(ls "$OUT"/torch-*.whl)
 echo "--- built: $(basename "$WHL") ($(du -h "$WHL" | cut -f1))"
