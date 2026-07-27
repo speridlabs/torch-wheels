@@ -5,8 +5,8 @@
 set -euo pipefail
 TORCH_WHEEL=$1
 PTXAS=$2
-OUTDIR=$3
-mkdir -p "$OUTDIR"
+mkdir -p "$3"
+OUTDIR=$(readlink -f "$3")
 
 PIN=$(unzip -p "$TORCH_WHEEL" '*.dist-info/METADATA' | grep -oE "^Requires-Dist: (pytorch-)?triton==[0-9.]+" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
 [ -n "$PIN" ] || { echo "no triton pin found in $TORCH_WHEEL"; exit 1; }
@@ -36,3 +36,5 @@ for f in files:
   ( cd "$WORK" && python3 -m wheel pack "unpack-$CP/triton-$PIN+cu130ptxas" -d "$OUTDIR" )
 done
 ls -lh "$OUTDIR"
+N=$(ls "$OUTDIR"/triton-*+cu130ptxas-*.whl 2>/dev/null | wc -l)
+[ "$N" -eq 3 ] || { echo "expected 3 patched triton wheels, got $N"; exit 1; }
