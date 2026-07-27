@@ -25,8 +25,9 @@ for f in files:
 ")
   [ -n "$URL" ] || { echo "no $CP wheel for triton $PIN"; exit 1; }
   echo "--- $CP: $URL"
-  curl -sL -o "$WORK/orig-$CP.whl" "$URL"
-  ( cd "$WORK" && python3 -m wheel unpack "orig-$CP.whl" -d "unpack-$CP" )
+  FN=$(basename "$URL")
+  curl -sL -o "$WORK/$FN" "$URL"
+  ( cd "$WORK" && python3 -m wheel unpack "$FN" -d "unpack-$CP" )
   DIR=$(ls -d "$WORK/unpack-$CP"/triton-*)
   install -m 0755 "$PTXAS" "$DIR/triton/backends/nvidia/bin/ptxas"
   mv "$DIR/triton-$PIN.dist-info" "$DIR/triton-$PIN+cu130ptxas.dist-info"
