@@ -46,7 +46,7 @@ torch = [
   { url = "https://github.com/speridlabs/torch-wheels/releases/download/v2.9.1-cu130-multiarch/torch-2.9.1%2Bcu130.multiarch-cp311-cp311-manylinux_2_28_x86_64.whl", marker = "python_version == '3.11'" },
 ]
 triton = [
-  { url = "https://github.com/speridlabs/torch-wheels/releases/download/v2.9.1-cu130-multiarch/triton-3.5.1%2Bcu130ptxas-cp312-cp312-manylinux_2_28_x86_64.whl", marker = "python_version == '3.12'" },
+  { url = "https://github.com/speridlabs/torch-wheels/releases/download/v2.9.1-cu130-multiarch/triton-3.5.1%2Bcu130ptxas-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", marker = "python_version == '3.12'" },
 ]
 ```
 
