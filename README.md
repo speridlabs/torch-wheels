@@ -61,6 +61,22 @@ Native torch SASS is only half of the B300 fix; these wheels carry the other hal
 
 Measured on an 8×B300 node (GPT-2 + ResNet-50 + Qwen2.5, fresh caches): official wheel + old libs **21–31 s** cold start → this wheel **~3 s**, bit-identical outputs, identical steady-state throughput.
 
+## Measured validation — official wheel vs these wheels, as shipped
+
+Fresh RunPod pod per GPU class, fresh `CUDA_CACHE_PATH` + fresh process per cold measurement, loaded `libcublasLt`/`libcudnn` verified per run via `/proc/self/maps`. "Cold" = CUDA context init + first touch of eager, fp32/bf16 matmul, conv2d and SDPA paths. Full harness: `scripts/` history / [docs/why-multiarch.md](docs/why-multiarch.md).
+
+| GPU (CC) | torch | official: cold / driver-cache / `torch.compile` | these wheels: cold / driver-cache / `torch.compile` |
+|---|---|---|---|
+| **B300** (10.3) | 2.9.1 | 21.6 s / 300 MB / ❌ `ptxas: sm_103a not defined` | **0.65 s / 0.0 MB / ✅ 1.5 s** |
+| **B300** (10.3) | 2.11.0 | 21.7 s / 296 MB / ✅ | **1.18 s / 0.5 MB / ✅ 1.5 s** |
+| H100 (9.0) | 2.9.1 | 0.97 s / 0.4 MB / ✅ | 0.76 s / 0.3 MB / ✅ |
+| H200 (9.0) | 2.9.1 | 0.90 s / 0.4 MB / ✅ | 0.73 s / 0.3 MB / ✅ |
+| RTX 5090 (12.0) | 2.9.1 | 0.49 s / 0.0 MB / ✅ | 0.41 s / 0.0 MB / ✅ |
+
+In every cell: torch-native ops (randn, elementwise, layernorm, softmax, reductions) **bitwise-identical** between the two builds; cuBLAS/cuDNN-backed ops (matmul fp32/bf16, conv2d, SDPA) within float tolerance; steady-state medians equal. On Hopper and consumer Blackwell these wheels are an exact drop-in; on B300 they remove the driver's one-time sm_100→10.3 recompilation (~33× faster cold start, no `~/.nv/ComputeCache` dependence) and make `torch.compile` work out of the box.
+
+Driver requirement: host driver **≥ 580.65** (CUDA 13 userspace). On datacenter GPUs stuck behind older host drivers (rented pods), NVIDIA's `cuda-compat-13-0` forward-compatibility package inside the container is the supported workaround — not applicable to GeForce.
+
 ## Pairing with CUDA extension packages
 
 These wheels report torch `2.9.1` / `2.11.0` with CUDA `13.0` — any prebuilt extension wheel compiled against the same `(torch minor, CUDA major.minor)` pairing keeps working, and the whole CUDA-13 set must move together (e.g. `torchvision` from the cu130 index, plus your own cu130-built extension wheels; mixing a cu128 piece fails at import).
