@@ -21,7 +21,7 @@ on:
         default: true
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: build-wheels-${{ github.ref }}
@@ -137,6 +137,8 @@ jobs:
     needs: [plan, build, triton]
     if: github.event_name == 'push' || inputs.publish
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
